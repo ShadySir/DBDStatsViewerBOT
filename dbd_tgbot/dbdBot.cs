@@ -79,57 +79,64 @@ namespace dbdBot
         }
         private async Task HandlerMessageAsync(ITelegramBotClient botClient, Message message)
         {
-            if (DictTempPerkBuilds.ContainsKey(message.Chat.Id) && DictTempPerkBuilds[message.Chat.Id] == null)
+            try
             {
-                DictTempPerkBuilds[message.Chat.Id] = new();
+                if (DictTempPerkBuilds.ContainsKey(message.Chat.Id) && DictTempPerkBuilds[message.Chat.Id] == null)
+                {
+                    DictTempPerkBuilds[message.Chat.Id] = new();
+                }
+                if (message == null || message.Text == null) return;
+                if (message.Text == "/cancel")
+                {
+                    DictTempRole.Remove(message.Chat.Id);
+                    DictTempPerkBuild.Remove(message.Chat.Id);
+                    DictAskingID.Remove(message.Chat.Id);
+                    DictAskingCharacterName.Remove(message.Chat.Id);
+                    DictAskingPerk.Remove(message.Chat.Id);
+                    DictAskingPageFor.Remove(message.Chat.Id);
+                    await botClient.SendTextMessageAsync(message.Chat.Id, "Cancelled");
+                    return;
+                }
             }
-            if (message == null || message.Text == null) return;
-            if (message.Text == "/cancel")
-            {
-                DictTempRole.Remove(message.Chat.Id);
-                DictTempPerkBuild.Remove(message.Chat.Id);
-                DictAskingID.Remove(message.Chat.Id);
-                DictAskingCharacterName.Remove(message.Chat.Id);
-                DictAskingPerk.Remove(message.Chat.Id);
-                DictAskingPageFor.Remove(message.Chat.Id);
-                await botClient.SendTextMessageAsync(message.Chat.Id, "Cancelled");
-                return;
-            }
+            catch (Exception) { await botClient.SendTextMessageAsync(message.Chat.Id, "Something went horribly wrong"); }
 
             Int64 ID = -1;
             int page = 0;
 
-            if (DictAskingBuildName.ContainsKey(message.Chat.Id) && DictAskingBuildName[message.Chat.Id])
+            try
             {
-                DictAskingBuildName.Remove(message.Chat.Id);
-                DictTempPerkBuild[message.Chat.Id].BuildName = message.Text;
-
-                await botClient.SendTextMessageAsync(message.Chat.Id, "Please enter a character\'s full name");
-
-                DictAskingCharacterName[message.Chat.Id] = true;
-                return;
-            }
-            if (DictAskingID.ContainsKey(message.Chat.Id) && DictAskingID[message.Chat.Id])
-            {
-                try
+                if (DictAskingBuildName.ContainsKey(message.Chat.Id) && DictAskingBuildName[message.Chat.Id])
                 {
-                    ID = Int64.Parse(message.Text);
-                }
-                catch (Exception){
-                    await botClient.SendTextMessageAsync(message.Chat.Id, "Invalid ID, it can only contain numbers");
-                }
+                    DictAskingBuildName.Remove(message.Chat.Id);
+                    DictTempPerkBuild[message.Chat.Id].BuildName = message.Text;
 
-                if (ID != -1)
+                    await botClient.SendTextMessageAsync(message.Chat.Id, "Please enter a character\'s full name");
+
+                    DictAskingCharacterName[message.Chat.Id] = true;
+                    return;
+                }
+                if (DictAskingID.ContainsKey(message.Chat.Id) && DictAskingID[message.Chat.Id])
                 {
-                    if (shadyClient.GetUserStatsForGameAsync(message.Text).Result == null)
+                    try
                     {
-                        await botClient.SendTextMessageAsync(message.Chat.Id, "Couldn\'t find stats, possible reasons:\n-SteamID non existent\n-Dead by Daylight is not purchased\n-Profile or progression is set private");
-                        DictAskingID.Remove(message.Chat.Id);
-                        return;
+                        ID = Int64.Parse(message.Text);
                     }
-                    DictUserStats[message.Chat.Id] = shadyClient.GetUserStatsForGameAsync(message.Text).Result;
-                    var keyboard = new InlineKeyboardMarkup(new InlineKeyboardButton[][]
-                                                            {
+                    catch (Exception)
+                    {
+                        await botClient.SendTextMessageAsync(message.Chat.Id, "Invalid ID, it can only contain numbers");
+                    }
+
+                    if (ID != -1)
+                    {
+                        if (shadyClient.GetUserStatsForGameAsync(message.Text).Result == null)
+                        {
+                            await botClient.SendTextMessageAsync(message.Chat.Id, "Couldn\'t find stats, possible reasons:\n-SteamID non existent\n-Dead by Daylight is not purchased\n-Profile or progression is set private");
+                            DictAskingID.Remove(message.Chat.Id);
+                            return;
+                        }
+                        DictUserStats[message.Chat.Id] = shadyClient.GetUserStatsForGameAsync(message.Text).Result;
+                        var keyboard = new InlineKeyboardMarkup(new InlineKeyboardButton[][]
+                                                                {
                                                                 new []
                                                                 {
                                                                     InlineKeyboardButton.WithCallbackData("General survivor stats", "survivor_stats"),
@@ -159,541 +166,342 @@ namespace dbdBot
                                                                 {
                                                                     InlineKeyboardButton.WithCallbackData("Survivors downed using killer power", "power_down"),
                                                                 }
-                                                            }
-                    );
+                                                                }
+                        );
 
-                    await botClient.SendTextMessageAsync(message.Chat.Id, $"Showing stats for {ID}\n" +
-                        $"\nTotal bloodpoints earned: {((int)DictUserStats[message.Chat.Id].playerstats.stats[FindIndexByStatName("DBD_BloodwebPoints", message.Chat.Id)].value).ToString("#,##0")}" +
-                        $"\nCurrent grade as Survivor: {GetRankFromSkulls((int)DictUserStats[message.Chat.Id].playerstats.stats[FindIndexByStatName("DBD_CamperSkulls", message.Chat.Id)].value)}" +
-                        $"\nCurrent grade as Killer: {GetRankFromSkulls((int)DictUserStats[message.Chat.Id].playerstats.stats[FindIndexByStatName("DBD_KillerSkulls", message.Chat.Id)].value)}", replyMarkup: keyboard, parseMode: ParseMode.Markdown);
-                    try
-                    {
-                        DictUserStats[message.Chat.Id].playerstats.stats[0].value = 0;
+                        await botClient.SendTextMessageAsync(message.Chat.Id, $"Showing stats for {ID}\n" +
+                            $"\nTotal bloodpoints earned: {((int)DictUserStats[message.Chat.Id].playerstats.stats[FindIndexByStatName("DBD_BloodwebPoints", message.Chat.Id)].value).ToString("#,##0")}" +
+                            $"\nCurrent grade as Survivor: {GetRankFromSkulls((int)DictUserStats[message.Chat.Id].playerstats.stats[FindIndexByStatName("DBD_CamperSkulls", message.Chat.Id)].value)}" +
+                            $"\nCurrent grade as Killer: {GetRankFromSkulls((int)DictUserStats[message.Chat.Id].playerstats.stats[FindIndexByStatName("DBD_KillerSkulls", message.Chat.Id)].value)}", replyMarkup: keyboard, parseMode: ParseMode.Markdown);
+                        try
+                        {
+                            DictUserStats[message.Chat.Id].playerstats.stats[0].value = 0;
+                        }
+                        catch (Exception) { }
                     }
-                    catch (Exception){}
-                }
-                DictAskingID[message.Chat.Id] = false;
-                return;
-            }
-            if (DictAskingCharacterName.ContainsKey(message.Chat.Id) && DictAskingCharacterName[message.Chat.Id])
-            {
-                List<string> names = new();
-                if (SurvivorList != null)
-                {
-                    for (int i = 0; i < SurvivorList.Count; i++)
-                    {
-                        names.Add(SurvivorList[i].name);
-                    }
-                    if (names.Contains(message.Text))
-                    {
-                        DictTempRole.Add(message.Chat.Id, "Survivor");
-                        DictTempPerkBuild[message.Chat.Id].CharacterName = message.Text;
-                        DictAskingCharacterName.Remove(message.Chat.Id);
-                        DictAskingPerk[message.Chat.Id] = true;
-                        await botClient.SendTextMessageAsync(message.Chat.Id, "Enter up to 4 perk names to add them to this build." +
-                            "\nThe operation will finish after you type /finish" +
-                            "\nYou can also remove one of the perks you added by typing /remove_perk {name of the perk you want to remove}");
-                        return;
-                    }
-                }
-                if (DictAskingCharacterName.ContainsKey(message.Chat.Id) && DictAskingCharacterName[message.Chat.Id] && KillerList != null)
-                {
-                    names.Clear();
-                    for (int i = 0; i < KillerList.Count; i++)
-                    {
-                        names.Add(KillerList[i].name);
-                    }
-                    if (names.Contains(message.Text))
-                    {
-                        DictTempRole.Add(message.Chat.Id, "Killer");
-                        DictTempPerkBuild[message.Chat.Id].CharacterName = message.Text;
-                        DictAskingCharacterName.Remove(message.Chat.Id);
-                        DictAskingPerk[message.Chat.Id] = true;
-                        await botClient.SendTextMessageAsync(message.Chat.Id, "Enter up to 4 perk names to add them to this build." +
-                            "\nThe operation will finish after you type /finish" +
-                            "\nYou can also remove one of the perks you added by typing /remove_perk {name of the perk you want to remove}");
-                        return;
-                    }
-                }
-                if (!DictTempRole.ContainsKey(message.Chat.Id))
-                {
-                    await botClient.SendTextMessageAsync(message.Chat.Id, "Try again or type /cancel to abort the operation");
-                }
-                return;
-            }
-            if (DictAskingPerk.ContainsKey(message.Chat.Id) && DictAskingPerk[message.Chat.Id])
-            {
-                if (message.Text == "/finish")
-                {
-                    await botClient.SendTextMessageAsync(message.Chat.Id, DictTempPerkBuild[message.Chat.Id].ToString());
-                    DictAskingPerk.Remove(message.Chat.Id);
-                    if (DictTempPerkBuilds[message.Chat.Id] == null) {
-                        await botClient.SendTextMessageAsync(message.Chat.Id, "s");
-                        return;
-                    }
-                    if (DictTempPerkBuild[message.Chat.Id] == null)
-                    {
-                        await botClient.SendTextMessageAsync(message.Chat.Id, "no s");
-                        return;
-                    }
-                    DictTempPerkBuilds[message.Chat.Id].perkBuilds.Add(DictTempPerkBuild[message.Chat.Id]);
-                    string jason = JsonConvert.SerializeObject(DictTempPerkBuilds[message.Chat.Id]);
-                    System.IO.File.WriteAllText($@"Data\Builds_{message.Chat.Id}.json", jason);
-                    await botClient.SendTextMessageAsync(message.Chat.Id, "Successfully added this build.\nYou can view all of your saved builds by using /view_builds");
+                    DictAskingID[message.Chat.Id] = false;
                     return;
                 }
-                if (message.Text.StartsWith("/remove_perk "))
+                if (DictAskingCharacterName.ContainsKey(message.Chat.Id) && DictAskingCharacterName[message.Chat.Id])
                 {
-                    string? PerkNameForRemoval = message.Text.Remove(0, 13);
-                    Perk? PerkForRemoval = GetPerkFromName(PerkNameForRemoval);
-                    if (PerkForRemoval != null)
+                    List<string> names = new();
+                    if (SurvivorList != null)
                     {
-                        if (DictTempPerkBuild[message.Chat.Id].Perks.Remove(PerkForRemoval))
+                        for (int i = 0; i < SurvivorList.Count; i++)
                         {
-                            await botClient.SendTextMessageAsync(message.Chat.Id, $"Successfully removed perk {PerkForRemoval.perk_name}");
-                            await botClient.SendTextMessageAsync(message.Chat.Id, DictTempPerkBuild[message.Chat.Id].ToString());
+                            names.Add(SurvivorList[i].name);
+                        }
+                        if (names.Contains(message.Text))
+                        {
+                            DictTempRole.Add(message.Chat.Id, "Survivor");
+                            DictTempPerkBuild[message.Chat.Id].CharacterName = message.Text;
+                            DictAskingCharacterName.Remove(message.Chat.Id);
+                            DictAskingPerk[message.Chat.Id] = true;
+                            await botClient.SendTextMessageAsync(message.Chat.Id, "Enter up to 4 perk names to add them to this build." +
+                                "\nThe operation will finish after you type /finish" +
+                                "\nYou can also remove one of the perks you added by typing /remove_perk {name of the perk you want to remove}");
+                            return;
+                        }
+                    }
+                    if (DictAskingCharacterName.ContainsKey(message.Chat.Id) && DictAskingCharacterName[message.Chat.Id] && KillerList != null)
+                    {
+                        names.Clear();
+                        for (int i = 0; i < KillerList.Count; i++)
+                        {
+                            names.Add(KillerList[i].name);
+                        }
+                        if (names.Contains(message.Text))
+                        {
+                            DictTempRole.Add(message.Chat.Id, "Killer");
+                            DictTempPerkBuild[message.Chat.Id].CharacterName = message.Text;
+                            DictAskingCharacterName.Remove(message.Chat.Id);
+                            DictAskingPerk[message.Chat.Id] = true;
+                            await botClient.SendTextMessageAsync(message.Chat.Id, "Enter up to 4 perk names to add them to this build." +
+                                "\nThe operation will finish after you type /finish" +
+                                "\nYou can also remove one of the perks you added by typing /remove_perk {name of the perk you want to remove}");
+                            return;
+                        }
+                    }
+                    if (!DictTempRole.ContainsKey(message.Chat.Id))
+                    {
+                        await botClient.SendTextMessageAsync(message.Chat.Id, "Try again or type /cancel to abort the operation");
+                    }
+                    return;
+                }
+                if (DictAskingPerk.ContainsKey(message.Chat.Id) && DictAskingPerk[message.Chat.Id])
+                {
+                    if (message.Text == "/finish")
+                    {
+                        await botClient.SendTextMessageAsync(message.Chat.Id, DictTempPerkBuild[message.Chat.Id].ToString());
+                        DictAskingPerk.Remove(message.Chat.Id);
+                        DictTempPerkBuilds[message.Chat.Id].perkBuilds.Add(DictTempPerkBuild[message.Chat.Id]);
+                        string jason = JsonConvert.SerializeObject(DictTempPerkBuilds[message.Chat.Id]);
+                        System.IO.File.WriteAllText($@"Data\Builds_{message.Chat.Id}.json", jason);
+                        await botClient.SendTextMessageAsync(message.Chat.Id, "Successfully added this build.\nYou can view all of your saved builds by using /view_builds");
+                        return;
+                    }
+                    if (message.Text.StartsWith("/remove_perk "))
+                    {
+                        string? PerkNameForRemoval = message.Text.Remove(0, 13);
+                        Perk? PerkForRemoval = GetPerkFromName(PerkNameForRemoval);
+                        if (PerkForRemoval != null)
+                        {
+                            if (DictTempPerkBuild[message.Chat.Id].Perks.Remove(PerkForRemoval))
+                            {
+                                await botClient.SendTextMessageAsync(message.Chat.Id, $"Successfully removed perk {PerkForRemoval.perk_name}");
+                                await botClient.SendTextMessageAsync(message.Chat.Id, DictTempPerkBuild[message.Chat.Id].ToString());
+                            }
+                            else
+                            {
+                                await botClient.SendTextMessageAsync(message.Chat.Id, $"That wasn\'t in your build");
+                            }
                         }
                         else
                         {
-                            await botClient.SendTextMessageAsync(message.Chat.Id, $"That wasn\'t in your build");
+                            await botClient.SendTextMessageAsync(message.Chat.Id, "This perk doesn\'t exist, make sure to double check the spelling");
                         }
+                        return;
                     }
-                    else
+                    Perk? perk = GetPerkFromName(message.Text);
+                    if (perk == null)
                     {
                         await botClient.SendTextMessageAsync(message.Chat.Id, "This perk doesn\'t exist, make sure to double check the spelling");
                     }
-                    return;
-                }
-                Perk? perk = GetPerkFromName(message.Text);
-                if (perk == null)
-                {
-                    await botClient.SendTextMessageAsync(message.Chat.Id, "This perk doesn\'t exist, make sure to double check the spelling");
-                }
-                if (perk != null && DictTempPerkBuild[message.Chat.Id] != null) 
-                {
-                    if (DictTempPerkBuild[message.Chat.Id].Perks.Contains(perk))
+                    if (perk != null && DictTempPerkBuild[message.Chat.Id] != null)
                     {
-                        await botClient.SendTextMessageAsync(message.Chat.Id, "That\'s already in there");
-                        return;
-                    }
-                    if (perk.role == DictTempRole[message.Chat.Id] && DictTempPerkBuild[message.Chat.Id].Perks.Count < 4)
-                    {
-                        DictTempPerkBuild[message.Chat.Id].Perks.Add(perk);
-                        await botClient.SendTextMessageAsync(message.Chat.Id, $"Added perk {perk.perk_name}");
-                    }
-                    else if (perk.role == DictTempRole[message.Chat.Id])
-                    {
-                        await botClient.SendTextMessageAsync(message.Chat.Id, "Too many, that\'s cheating");
-                    }
-                    else if (DictTempPerkBuild[message.Chat.Id].Perks.Count < 4)
-                    {
-                        await botClient.SendTextMessageAsync(message.Chat.Id, "That\'s a wrong perk role");
-                    }
-                    else
-                    {
-                        await botClient.SendTextMessageAsync(message.Chat.Id, "Nah you can\'t mess up both perk role and counting, come on");
-                    }
-                    await botClient.SendTextMessageAsync(message.Chat.Id, DictTempPerkBuild[message.Chat.Id].ToString());
-                }
-                else if (DictTempPerkBuild[message.Chat.Id] == null)
-                {
-                    DictTempPerkBuild[message.Chat.Id] = new()
-                    {
-                        Perks = new()
-                    };
-                    if (DictTempPerkBuild[message.Chat.Id].Perks.Contains(perk))
-                    {
-                        await botClient.SendTextMessageAsync(message.Chat.Id, "That\'s already in there");
-                        return;
-                    }
-                    if (perk.role == DictTempRole[message.Chat.Id] && DictTempPerkBuild[message.Chat.Id].Perks.Count < 4)
-                    {
-                        DictTempPerkBuild[message.Chat.Id].Perks.Add(perk);
-                        await botClient.SendTextMessageAsync(message.Chat.Id, $"Added perk {perk.perk_name}");
-                    }
-                    else if (perk.role == DictTempRole[message.Chat.Id])
-                    {
-                        await botClient.SendTextMessageAsync(message.Chat.Id, "Too many, that\'s cheating");
-                    }
-                    else if (DictTempPerkBuild[message.Chat.Id].Perks.Count < 4)
-                    {
-                        await botClient.SendTextMessageAsync(message.Chat.Id, "That\'s a wrong perk role");
-                    }
-                    else
-                    {
-                        await botClient.SendTextMessageAsync(message.Chat.Id, "Nah you can\'t mess up both perk role and counting, come on");
-                    }
-                    await botClient.SendTextMessageAsync(message.Chat.Id, DictTempPerkBuild[message.Chat.Id].ToString());
-                }
-                return;
-            }
-            if (DictAskingPageFor.ContainsKey(message.Chat.Id))
-            {
-                try
-                {
-                    page = int.Parse(message.Text);
-                }
-                catch (Exception)
-                {
-                    await botClient.SendTextMessageAsync(message.Chat.Id, "Invalid page, it can only contain numbers");
-                }
-                if (page != 0)
-                {
-                    int DisplayIndexFrom, DisplayIndexTo;
-                    switch (DictAskingPageFor[message.Chat.Id])
-                    {
-                        case "survivors":
-                            if (page < 1 || page > SurvivorList.Count / 10 + 1)
-                            {
-                                await botClient.SendTextMessageAsync(message.Chat.Id, "Invalid page, please enter page from specified range");
-                                return;
-                            }
-                            DisplayIndexFrom = (page - 1) * 10;
-                            if (page == SurvivorList.Count / 10 + 1)
-                            {
-                                DisplayIndexTo = SurvivorList.Count - 1;
-                            }
-                            else 
-                            { 
-                                DisplayIndexTo = page * 10 - 1; 
-                            }
-                            
-                            await botClient.SendTextMessageAsync(message.Chat.Id, $"Showing survivors page {page} ({DisplayIndexFrom + 1} - {DisplayIndexTo + 1})");
-                            for (int i = DisplayIndexFrom; i <= DisplayIndexTo; i++)
-                            {
-                                await botClient.SendTextMessageAsync(message.Chat.Id, $"{SurvivorList[i].name}\n\n{SurvivorList[i].overview}");
-                            }
-                            break;
-                        case "killers":
-                            if (page < 1 || page > KillerList.Count / 10 + 1)
-                            {
-                                await botClient.SendTextMessageAsync(message.Chat.Id, "Invalid page, please enter page from specified range");
-                                DictAskingPageFor.Remove(message.Chat.Id);
-                                return;
-                            }
-                            DisplayIndexFrom = (page - 1) * 10;
-                            if (page == KillerList.Count / 10 + 1)
-                            {
-                                DisplayIndexTo = KillerList.Count - 1;
-                            }
-                            else
-                            {
-                                DisplayIndexTo = page * 10 - 1;
-                            }
-
-                            await botClient.SendTextMessageAsync(message.Chat.Id, $"Showing killers page {page} ({DisplayIndexFrom + 1} - {DisplayIndexTo + 1})");
-                            for (int i = DisplayIndexFrom; i <= DisplayIndexTo; i++)
-                            {
-                                await botClient.SendTextMessageAsync(message.Chat.Id, $"{KillerList[i].name}\n\n{KillerList[i].overview}");
-                            }
-                            break;
-                        case "s_perks":
-                            if (page < 1 || page > SPerkList.Count / 10 + 1)
-                            {
-                                await botClient.SendTextMessageAsync(message.Chat.Id, "Invalid page, please enter page from specified range");
-                                DictAskingPageFor.Remove(message.Chat.Id);
-                                return;
-                            }
-                            DisplayIndexFrom = (page - 1) * 10;
-                            if (page == SPerkList.Count / 10 + 1)
-                            {
-                                DisplayIndexTo = SPerkList.Count - 1;
-                            }
-                            else
-                            {
-                                DisplayIndexTo = page * 10 - 1;
-                            }
-
-                            await botClient.SendTextMessageAsync(message.Chat.Id, $"Showing survivor perks page {page} ({DisplayIndexFrom + 1} - {DisplayIndexTo + 1})");
-                            for (int i = DisplayIndexFrom; i <= DisplayIndexTo; i++)
-                            {
-                                await botClient.SendTextMessageAsync(message.Chat.Id, $"{SPerkList[i].perk_name}\n\n{SPerkList[i].description}");
-                            }
-                            break;
-                        case "k_perks":
-                            if (page < 1 || page > KPerkList.Count / 10 + 1)
-                            {
-                                await botClient.SendTextMessageAsync(message.Chat.Id, "Invalid page, please enter page from specified range");
-                                DictAskingPageFor.Remove(message.Chat.Id);
-                                return;
-                            }
-                            DisplayIndexFrom = (page - 1) * 10;
-                            if (page == KPerkList.Count / 10 + 1)
-                            {
-                                DisplayIndexTo = KPerkList.Count - 1;
-                            }
-                            else
-                            {
-                                DisplayIndexTo = page * 10 - 1;
-                            }
-
-                            await botClient.SendTextMessageAsync(message.Chat.Id, $"Showing killer perks page {page} ({DisplayIndexFrom + 1} - {DisplayIndexTo + 1})");
-                            for (int i = DisplayIndexFrom; i <= DisplayIndexTo; i++)
-                            {
-                                await botClient.SendTextMessageAsync(message.Chat.Id, $"{KPerkList[i].perk_name}\n\n{KPerkList[i].description}");
-                            }
-                            break;
-                        default:
-                            break;
-                    }
-                }
-                return;
-            }
-
-            if (message.Text.StartsWith("/edit_build "))
-            {
-                if (System.IO.File.Exists($@"Data\Builds_{message.Chat.Id}.json"))
-                {
-                    if (!DictTempPerkBuilds.ContainsKey(message.Chat.Id))
-                    {
-                        DictTempPerkBuilds.Add(message.Chat.Id, new());
-                    }
-                    DictTempPerkBuilds[message.Chat.Id] = JsonConvert.DeserializeObject<PerkBuilds>(System.IO.File.ReadAllText($@"Data\Builds_{message.Chat.Id}.json"));
-                }
-                else
-                {
-                    await botClient.SendTextMessageAsync(message.Chat.Id, "You don\'t have any builds");
-                    return;
-                }
-                string? BuildNameForEditing = message.Text.Remove(0, 12);
-                PerkBuild? BuildForEditing = null;
-                for (int i = 0; i < DictTempPerkBuilds[message.Chat.Id].perkBuilds.Count; i++)
-                {
-                    if (DictTempPerkBuilds[message.Chat.Id].perkBuilds[i].BuildName == BuildNameForEditing)
-                    {
-                        BuildForEditing = DictTempPerkBuilds[message.Chat.Id].perkBuilds[i];
-                    }
-                }
-                if (BuildForEditing == null)
-                {
-                    await botClient.SendTextMessageAsync(message.Chat.Id, "This build doesn\'t exist, make sure to double check the spelling");
-                }
-                else
-                {
-                    if (!DictTempPerkBuild.ContainsKey(message.Chat.Id))
-                    {
-                        DictTempPerkBuild.Add(message.Chat.Id, BuildForEditing);
-                    }
-                    else
-                    {
-                        DictTempPerkBuild[message.Chat.Id] = BuildForEditing;
-                    }
-                    if (!DictAskingPerk.ContainsKey(message.Chat.Id))
-                    {
-                        DictAskingPerk.Add(message.Chat.Id, true);
-                    }
-                    else
-                    {
-                        DictAskingPerk[message.Chat.Id] = true;
-                    }
-                    string? role = GetRoleFromName(BuildForEditing.CharacterName);
-                    if (role != null)
-                    if (!DictTempRole.ContainsKey(message.Chat.Id))
-                    {
-                        DictTempRole.Add(message.Chat.Id, role);
-                    }
-                    else
-                    {
-                        DictTempRole[message.Chat.Id] = role;
-                    }
-                    await botClient.SendTextMessageAsync(message.Chat.Id, DictTempPerkBuild[message.Chat.Id].ToString());
-                    await botClient.SendTextMessageAsync(message.Chat.Id, "You can type a perk name to add perks, use /remove_perk {name of the perk you want to remove}\n\nUse /finish when you\'re done");
-                    return;
-                }
-                return;
-            }
-            if (message.Text.StartsWith("/delete_build "))
-            {
-                if (System.IO.File.Exists($@"Data\Builds_{message.Chat.Id}.json"))
-                {
-                    if (!DictTempPerkBuilds.ContainsKey(message.Chat.Id))
-                    {
-                        DictTempPerkBuilds.Add(message.Chat.Id, new());
-                    }
-                    DictTempPerkBuilds[message.Chat.Id] = JsonConvert.DeserializeObject<PerkBuilds>(System.IO.File.ReadAllText($@"Data\Builds_{message.Chat.Id}.json"));
-                    if (DictTempPerkBuilds[message.Chat.Id] == null)
-                    {
-                        DictTempPerkBuilds[message.Chat.Id] = new();
-                    }
-                }
-                else
-                {
-                    await botClient.SendTextMessageAsync(message.Chat.Id, "You don\'t have any builds");
-                    return;
-                }
-                string? BuildNameForDeleting = message.Text.Remove(0, 14);
-                PerkBuild? BuildForDeleting = null;
-                for (int i = 0; i < DictTempPerkBuilds[message.Chat.Id].perkBuilds.Count; i++)
-                {
-                    if (DictTempPerkBuilds[message.Chat.Id].perkBuilds[i].BuildName == BuildNameForDeleting)
-                    {
-                        BuildForDeleting = DictTempPerkBuilds[message.Chat.Id].perkBuilds[i];
-                    }
-                }
-                if (BuildForDeleting == null)
-                {
-                    await botClient.SendTextMessageAsync(message.Chat.Id, "This build doesn\'t exist, make sure to double check the spelling");
-                }
-                else
-                {
-                    DictTempPerkBuilds[message.Chat.Id].perkBuilds.Remove(BuildForDeleting);
-                    string jason = JsonConvert.SerializeObject(DictTempPerkBuilds[message.Chat.Id]);
-                    System.IO.File.WriteAllText($@"Data\Builds_{message.Chat.Id}.json", jason);
-                    await botClient.SendTextMessageAsync(message.Chat.Id, "Successfully deleted this build.\nYou can view all of your saved builds by using /view_builds");
-                    return;
-                }
-                return;
-            }
-
-            switch (message.Text)
-            {
-                case "/start":
-                    await botClient.SendTextMessageAsync(message.Chat.Id, "Hi, i\'m a bot for viewing your Dead by Daylight stats in Steam, looking up perks, killers and survivors" +
-                        "\n\nYou can use /help for the list of my commands");
-                    break;
-                case "/stats":
-                    if (!DictUserStats.ContainsKey(message.Chat.Id))
-                    {
-                        DictUserStats.Add(message.Chat.Id, null);
-                    }
-                    if (!DictAskingID.ContainsKey(message.Chat.Id))
-                    {
-                        DictAskingID.Add(message.Chat.Id, true);
-                    }
-                    await botClient.SendTextMessageAsync(message.Chat.Id, "Please enter Steam ID to display stats for");
-                    DictAskingID[message.Chat.Id] = true;
-                    break;
-                case "/survivor_perks":
-                    if (SPerkList != null)
-                    {
-                        await botClient.SendTextMessageAsync(message.Chat.Id, $"Select page (1 - {SPerkList.Count / 10 + 1})");
-                        if (!DictAskingPageFor.ContainsKey(message.Chat.Id))
+                        if (DictTempPerkBuild[message.Chat.Id].Perks.Contains(perk))
                         {
-                            DictAskingPageFor.Add(message.Chat.Id, "s_perks");
+                            await botClient.SendTextMessageAsync(message.Chat.Id, "That\'s already in there");
+                            return;
+                        }
+                        if (perk.role == DictTempRole[message.Chat.Id] && DictTempPerkBuild[message.Chat.Id].Perks.Count < 4)
+                        {
+                            DictTempPerkBuild[message.Chat.Id].Perks.Add(perk);
+                            await botClient.SendTextMessageAsync(message.Chat.Id, $"Added perk {perk.perk_name}");
+                        }
+                        else if (perk.role == DictTempRole[message.Chat.Id])
+                        {
+                            await botClient.SendTextMessageAsync(message.Chat.Id, "Too many, that\'s cheating");
+                        }
+                        else if (DictTempPerkBuild[message.Chat.Id].Perks.Count < 4)
+                        {
+                            await botClient.SendTextMessageAsync(message.Chat.Id, "That\'s a wrong perk role");
                         }
                         else
                         {
-                            DictAskingPageFor[message.Chat.Id] = "s_perks";
+                            await botClient.SendTextMessageAsync(message.Chat.Id, "Nah you can\'t mess up both perk role and counting, come on");
                         }
-                        await botClient.SendTextMessageAsync(message.Chat.Id, "I will ask you for pages until you use /cancel");
+                        await botClient.SendTextMessageAsync(message.Chat.Id, DictTempPerkBuild[message.Chat.Id].ToString());
                     }
-                    else
+                    else if (DictTempPerkBuild[message.Chat.Id] == null)
                     {
-                        await botClient.SendTextMessageAsync(message.Chat.Id, "DBD API Error: couldn\'t get perks");
-                    }
-                    break;
-                case "/killer_perks":
-                    if (KPerkList != null)
-                    {
-                        await botClient.SendTextMessageAsync(message.Chat.Id, $"Select page (1 - {KPerkList.Count / 10 + 1})");
-                        if (!DictAskingPageFor.ContainsKey(message.Chat.Id))
+                        DictTempPerkBuild[message.Chat.Id] = new()
                         {
-                            DictAskingPageFor.Add(message.Chat.Id, "k_perks");
+                            Perks = new()
+                        };
+                        if (DictTempPerkBuild[message.Chat.Id].Perks.Contains(perk))
+                        {
+                            await botClient.SendTextMessageAsync(message.Chat.Id, "That\'s already in there");
+                            return;
+                        }
+                        if (perk.role == DictTempRole[message.Chat.Id] && DictTempPerkBuild[message.Chat.Id].Perks.Count < 4)
+                        {
+                            DictTempPerkBuild[message.Chat.Id].Perks.Add(perk);
+                            await botClient.SendTextMessageAsync(message.Chat.Id, $"Added perk {perk.perk_name}");
+                        }
+                        else if (perk.role == DictTempRole[message.Chat.Id])
+                        {
+                            await botClient.SendTextMessageAsync(message.Chat.Id, "Too many, that\'s cheating");
+                        }
+                        else if (DictTempPerkBuild[message.Chat.Id].Perks.Count < 4)
+                        {
+                            await botClient.SendTextMessageAsync(message.Chat.Id, "That\'s a wrong perk role");
                         }
                         else
                         {
-                            DictAskingPageFor[message.Chat.Id] = "k_perks";
+                            await botClient.SendTextMessageAsync(message.Chat.Id, "Nah you can\'t mess up both perk role and counting, come on");
                         }
-                        await botClient.SendTextMessageAsync(message.Chat.Id, "I will ask you for pages until you use /cancel");
+                        await botClient.SendTextMessageAsync(message.Chat.Id, DictTempPerkBuild[message.Chat.Id].ToString());
                     }
-                    else
+                    return;
+                }
+                if (DictAskingPageFor.ContainsKey(message.Chat.Id))
+                {
+                    try
                     {
-                        await botClient.SendTextMessageAsync(message.Chat.Id, "DBD API Error: couldn\'t get perks");
+                        page = int.Parse(message.Text);
                     }
-                    break;
-                case "/survivors":
-                    if (SurvivorList != null)
+                    catch (Exception)
                     {
-                        await botClient.SendTextMessageAsync(message.Chat.Id, $"Select page (1 - {SurvivorList.Count / 10 + 1})");
-                        if (!DictAskingPageFor.ContainsKey(message.Chat.Id))
+                        await botClient.SendTextMessageAsync(message.Chat.Id, "Invalid page, it can only contain numbers");
+                    }
+                    if (page != 0)
+                    {
+                        int DisplayIndexFrom, DisplayIndexTo;
+                        switch (DictAskingPageFor[message.Chat.Id])
                         {
-                            DictAskingPageFor.Add(message.Chat.Id, "survivors");
+                            case "survivors":
+                                if (page < 1 || page > SurvivorList.Count / 10 + 1)
+                                {
+                                    await botClient.SendTextMessageAsync(message.Chat.Id, "Invalid page, please enter page from specified range");
+                                    return;
+                                }
+                                DisplayIndexFrom = (page - 1) * 10;
+                                if (page == SurvivorList.Count / 10 + 1)
+                                {
+                                    DisplayIndexTo = SurvivorList.Count - 1;
+                                }
+                                else
+                                {
+                                    DisplayIndexTo = page * 10 - 1;
+                                }
+
+                                await botClient.SendTextMessageAsync(message.Chat.Id, $"Showing survivors page {page} ({DisplayIndexFrom + 1} - {DisplayIndexTo + 1})");
+                                for (int i = DisplayIndexFrom; i <= DisplayIndexTo; i++)
+                                {
+                                    await botClient.SendTextMessageAsync(message.Chat.Id, $"{SurvivorList[i].name}\n\n{SurvivorList[i].overview}");
+                                }
+                                break;
+                            case "killers":
+                                if (page < 1 || page > KillerList.Count / 10 + 1)
+                                {
+                                    await botClient.SendTextMessageAsync(message.Chat.Id, "Invalid page, please enter page from specified range");
+                                    DictAskingPageFor.Remove(message.Chat.Id);
+                                    return;
+                                }
+                                DisplayIndexFrom = (page - 1) * 10;
+                                if (page == KillerList.Count / 10 + 1)
+                                {
+                                    DisplayIndexTo = KillerList.Count - 1;
+                                }
+                                else
+                                {
+                                    DisplayIndexTo = page * 10 - 1;
+                                }
+
+                                await botClient.SendTextMessageAsync(message.Chat.Id, $"Showing killers page {page} ({DisplayIndexFrom + 1} - {DisplayIndexTo + 1})");
+                                for (int i = DisplayIndexFrom; i <= DisplayIndexTo; i++)
+                                {
+                                    await botClient.SendTextMessageAsync(message.Chat.Id, $"{KillerList[i].name}\n\n{KillerList[i].overview}");
+                                }
+                                break;
+                            case "s_perks":
+                                if (page < 1 || page > SPerkList.Count / 10 + 1)
+                                {
+                                    await botClient.SendTextMessageAsync(message.Chat.Id, "Invalid page, please enter page from specified range");
+                                    DictAskingPageFor.Remove(message.Chat.Id);
+                                    return;
+                                }
+                                DisplayIndexFrom = (page - 1) * 10;
+                                if (page == SPerkList.Count / 10 + 1)
+                                {
+                                    DisplayIndexTo = SPerkList.Count - 1;
+                                }
+                                else
+                                {
+                                    DisplayIndexTo = page * 10 - 1;
+                                }
+
+                                await botClient.SendTextMessageAsync(message.Chat.Id, $"Showing survivor perks page {page} ({DisplayIndexFrom + 1} - {DisplayIndexTo + 1})");
+                                for (int i = DisplayIndexFrom; i <= DisplayIndexTo; i++)
+                                {
+                                    await botClient.SendTextMessageAsync(message.Chat.Id, $"{SPerkList[i].perk_name}\n\n{SPerkList[i].description}");
+                                }
+                                break;
+                            case "k_perks":
+                                if (page < 1 || page > KPerkList.Count / 10 + 1)
+                                {
+                                    await botClient.SendTextMessageAsync(message.Chat.Id, "Invalid page, please enter page from specified range");
+                                    DictAskingPageFor.Remove(message.Chat.Id);
+                                    return;
+                                }
+                                DisplayIndexFrom = (page - 1) * 10;
+                                if (page == KPerkList.Count / 10 + 1)
+                                {
+                                    DisplayIndexTo = KPerkList.Count - 1;
+                                }
+                                else
+                                {
+                                    DisplayIndexTo = page * 10 - 1;
+                                }
+
+                                await botClient.SendTextMessageAsync(message.Chat.Id, $"Showing killer perks page {page} ({DisplayIndexFrom + 1} - {DisplayIndexTo + 1})");
+                                for (int i = DisplayIndexFrom; i <= DisplayIndexTo; i++)
+                                {
+                                    await botClient.SendTextMessageAsync(message.Chat.Id, $"{KPerkList[i].perk_name}\n\n{KPerkList[i].description}");
+                                }
+                                break;
+                            default:
+                                break;
                         }
-                        else
-                        {
-                            DictAskingPageFor[message.Chat.Id] = "survivors";
-                        }
-                        await botClient.SendTextMessageAsync(message.Chat.Id, "I will ask you for pages until you use /cancel");
                     }
-                    else
-                    {
-                        await botClient.SendTextMessageAsync(message.Chat.Id, "DBD API Error: couldn\'t get survivors");
-                    }
-                    break;
-                case "/killers":
-                    if (KillerList != null)
-                    {
-                        await botClient.SendTextMessageAsync(message.Chat.Id, $"Select page (1 - {KillerList.Count / 10 + 1})");
-                        if (!DictAskingPageFor.ContainsKey(message.Chat.Id))
-                        {
-                            DictAskingPageFor.Add(message.Chat.Id, "killers");
-                        }
-                        else
-                        {
-                            DictAskingPageFor[message.Chat.Id] = "killers";
-                        }
-                        await botClient.SendTextMessageAsync(message.Chat.Id, "I will ask you for pages until you use /cancel");
-                    }
-                    else
-                    {
-                        await botClient.SendTextMessageAsync(message.Chat.Id, "DBD API Error: couldn\'t get killers");
-                    }
-                    break;
-                case "/add_build":
-                    if (!System.IO.File.Exists($@"Data\Builds_{message.Chat.Id}.json"))
-                    {
-                        string jason = System.IO.File.ReadAllText(@"Data\default.json");
-                        System.IO.File.WriteAllText($@"Data\Builds_{message.Chat.Id}.json", JsonConvert.SerializeObject(JsonConvert.DeserializeObject<PerkBuilds>(jason)));
-                    }
-                    if (!DictTempPerkBuilds.ContainsKey(message.Chat.Id))
-                    {
-                        DictTempPerkBuilds.Add(message.Chat.Id, new());
-                        DictTempPerkBuilds[message.Chat.Id].perkBuilds = new();
-                        DictTempPerkBuilds[message.Chat.Id].ChatID = message.Chat.Id;
-                    }
-                    else
-                    {
-                        if (DictTempPerkBuilds[message.Chat.Id] == null)
-                        {
-                            DictTempPerkBuilds[message.Chat.Id] = new()
-                            {
-                                perkBuilds = new(),
-                                ChatID = message.Chat.Id
-                            };
-                        }
-                        if (DictTempPerkBuilds[message.Chat.Id].perkBuilds.Count >= 10)
-                        {
-                            await botClient.SendTextMessageAsync(message.Chat.Id, "You\'ve reached your limit of builds, consider deleting some");
-                        }
-                    }
-                    if (!DictAskingCharacterName.ContainsKey(message.Chat.Id))
-                    {
-                        DictTempPerkBuild.Add(message.Chat.Id, new());
-                        DictTempPerkBuild[message.Chat.Id].Perks = new();
-                        DictAskingCharacterName.Add(message.Chat.Id, false);
-                        DictAskingBuildName.Add(message.Chat.Id, true);
-                        DictAskingPerk.Add(message.Chat.Id, false);
-                    }
+                    return;
+                }
+
+                if (message.Text.StartsWith("/edit_build "))
+                {
                     if (System.IO.File.Exists($@"Data\Builds_{message.Chat.Id}.json"))
                     {
-                        DictTempPerkBuilds[message.Chat.Id] = JsonConvert.DeserializeObject<PerkBuilds>(System.IO.File.ReadAllText($@"Data\Builds_{message.Chat.Id}.json"));
-                        if (DictTempPerkBuilds[message.Chat.Id] == null)
+                        if (!DictTempPerkBuilds.ContainsKey(message.Chat.Id))
                         {
-                            DictTempPerkBuilds[message.Chat.Id] = new();
+                            DictTempPerkBuilds.Add(message.Chat.Id, new());
                         }
+                        DictTempPerkBuilds[message.Chat.Id] = JsonConvert.DeserializeObject<PerkBuilds>(System.IO.File.ReadAllText($@"Data\Builds_{message.Chat.Id}.json"));
                     }
                     else
                     {
-                        //System.IO.File.Create($@"Data\Builds_{message.Chat.Id}.json");
+                        await botClient.SendTextMessageAsync(message.Chat.Id, "You don\'t have any builds");
+                        return;
                     }
-
-                    if (DictTempPerkBuilds[message.Chat.Id] == null)
+                    string? BuildNameForEditing = message.Text.Remove(0, 12);
+                    PerkBuild? BuildForEditing = null;
+                    for (int i = 0; i < DictTempPerkBuilds[message.Chat.Id].perkBuilds.Count; i++)
                     {
-                        DictTempPerkBuilds[message.Chat.Id] = new();
+                        if (DictTempPerkBuilds[message.Chat.Id].perkBuilds[i].BuildName == BuildNameForEditing)
+                        {
+                            BuildForEditing = DictTempPerkBuilds[message.Chat.Id].perkBuilds[i];
+                        }
                     }
-                    await botClient.SendTextMessageAsync(message.Chat.Id, "Please enter the build name");
-                    break;
-                case "/view_builds":
+                    if (BuildForEditing == null)
+                    {
+                        await botClient.SendTextMessageAsync(message.Chat.Id, "This build doesn\'t exist, make sure to double check the spelling");
+                    }
+                    else
+                    {
+                        if (!DictTempPerkBuild.ContainsKey(message.Chat.Id))
+                        {
+                            DictTempPerkBuild.Add(message.Chat.Id, BuildForEditing);
+                        }
+                        else
+                        {
+                            DictTempPerkBuild[message.Chat.Id] = BuildForEditing;
+                        }
+                        if (!DictAskingPerk.ContainsKey(message.Chat.Id))
+                        {
+                            DictAskingPerk.Add(message.Chat.Id, true);
+                        }
+                        else
+                        {
+                            DictAskingPerk[message.Chat.Id] = true;
+                        }
+                        string? role = GetRoleFromName(BuildForEditing.CharacterName);
+                        if (role != null)
+                            if (!DictTempRole.ContainsKey(message.Chat.Id))
+                            {
+                                DictTempRole.Add(message.Chat.Id, role);
+                            }
+                            else
+                            {
+                                DictTempRole[message.Chat.Id] = role;
+                            }
+                        await botClient.SendTextMessageAsync(message.Chat.Id, DictTempPerkBuild[message.Chat.Id].ToString());
+                        await botClient.SendTextMessageAsync(message.Chat.Id, "You can type a perk name to add perks, use /remove_perk {name of the perk you want to remove}\n\nUse /finish when you\'re done");
+                        return;
+                    }
+                    return;
+                }
+                if (message.Text.StartsWith("/delete_build "))
+                {
                     if (System.IO.File.Exists($@"Data\Builds_{message.Chat.Id}.json"))
                     {
                         if (!DictTempPerkBuilds.ContainsKey(message.Chat.Id))
@@ -705,58 +513,255 @@ namespace dbdBot
                         {
                             DictTempPerkBuilds[message.Chat.Id] = new();
                         }
-                        await botClient.SendTextMessageAsync(message.Chat.Id, "Here are your favorite builds" +
-                            "\nYou can: " +
-                            "\nedit any of them using /edit_build {build name}" +
-                            "\nadd a new one using /add_build" +
-                            "\ndelete one of them using /delete_build {build name}" +
-                            "\ndelete all of them using /delete_all");
-
-                        try
+                    }
+                    else
+                    {
+                        await botClient.SendTextMessageAsync(message.Chat.Id, "You don\'t have any builds");
+                        return;
+                    }
+                    string? BuildNameForDeleting = message.Text.Remove(0, 14);
+                    PerkBuild? BuildForDeleting = null;
+                    for (int i = 0; i < DictTempPerkBuilds[message.Chat.Id].perkBuilds.Count; i++)
+                    {
+                        if (DictTempPerkBuilds[message.Chat.Id].perkBuilds[i].BuildName == BuildNameForDeleting)
                         {
-                            if (DictTempPerkBuilds[message.Chat.Id] != null)
-                                for (int i = 1; i < DictTempPerkBuilds[message.Chat.Id].perkBuilds.Count; i++)
-                                {
-                                    if (DictTempPerkBuilds[message.Chat.Id].perkBuilds[i] != null)
-                                        await botClient.SendTextMessageAsync(message.Chat.Id, DictTempPerkBuilds[message.Chat.Id].perkBuilds[i].ToString());
-                                }
+                            BuildForDeleting = DictTempPerkBuilds[message.Chat.Id].perkBuilds[i];
                         }
-                        catch (Exception) { }
+                    }
+                    if (BuildForDeleting == null)
+                    {
+                        await botClient.SendTextMessageAsync(message.Chat.Id, "This build doesn\'t exist, make sure to double check the spelling");
                     }
                     else
                     {
-                        await botClient.SendTextMessageAsync(message.Chat.Id, "Nothing here yet");
+                        if (DictTempPerkBuilds[message.Chat.Id].perkBuilds.Count == 2)
+                        {
+                            System.IO.File.Delete($@"Data\Builds_{message.Chat.Id}.json");
+                            await botClient.SendTextMessageAsync(message.Chat.Id, "Successfully deleted this build.\nYou can view all of your saved builds by using /view_builds");
+                            return;
+                        }
+                        DictTempPerkBuilds[message.Chat.Id].perkBuilds.Remove(BuildForDeleting);
+                        string jason = JsonConvert.SerializeObject(DictTempPerkBuilds[message.Chat.Id]);
+                        System.IO.File.WriteAllText($@"Data\Builds_{message.Chat.Id}.json", jason);
+                        await botClient.SendTextMessageAsync(message.Chat.Id, "Successfully deleted this build.\nYou can view all of your saved builds by using /view_builds");
+                        return;
                     }
-                    break;
-                case "/delete_all":
-                    if (System.IO.File.Exists($@"Data\Builds_{message.Chat.Id}.json"))
-                    {
-                        System.IO.File.Delete($@"Data\Builds_{message.Chat.Id}.json");
-                        await botClient.SendTextMessageAsync(message.Chat.Id, "Burned to the ground!");
-                    }
-                    else
-                    {
-                        await botClient.SendTextMessageAsync(message.Chat.Id, "You didn\'t have anything anyway");
-                    }
-                    break;
-                case "/help":
-                    await botClient.SendTextMessageAsync(message.Chat.Id, "Here\'s what i can do:" +
-                        "\n/stats - you can enter a SteamID and see DbD stats for that Steam profile" +
-                        "\n/survivor_perks - see a list of all survivor perks" +
-                        "\n/killer_perks - see a list of all killer perks" +
-                        "\n/survivors - see a list of all survivors" +
-                        "\n/killers - see a list of all killers" +
-                        "\n/add_build - add a perk build to your favorites (up to 10)" +
-                        "\n/view_builds - see a list of your favorite builds" +
-                        "\n/edit_build {build name} - edit an existing build" +
-                        "\n/delete_build {build name} - delete an existing build" +
-                        "\n/delete_all - delete all builds" +
-                        "\n/cancel - cancel the current action");
-                    break;
-                default:
-                    await botClient.SendTextMessageAsync(message.Chat.Id, "Something ain\'t right");
-                    break;
+                    return;
+                }
             }
+            catch (Exception) { await botClient.SendTextMessageAsync(message.Chat.Id, "Something went horribly wrong"); }
+
+            try
+            {
+                switch (message.Text)
+                {
+                    case "/start":
+                        await botClient.SendTextMessageAsync(message.Chat.Id, "Hi, i\'m a bot for viewing your Dead by Daylight stats in Steam, looking up perks, killers and survivors" +
+                            "\n\nYou can use /help for the list of my commands");
+                        break;
+                    case "/stats":
+                        if (!DictUserStats.ContainsKey(message.Chat.Id))
+                        {
+                            DictUserStats.Add(message.Chat.Id, null);
+                        }
+                        if (!DictAskingID.ContainsKey(message.Chat.Id))
+                        {
+                            DictAskingID.Add(message.Chat.Id, true);
+                        }
+                        await botClient.SendTextMessageAsync(message.Chat.Id, "Please enter Steam ID to display stats for");
+                        DictAskingID[message.Chat.Id] = true;
+                        break;
+                    case "/survivor_perks":
+                        if (SPerkList != null)
+                        {
+                            await botClient.SendTextMessageAsync(message.Chat.Id, $"Select page (1 - {SPerkList.Count / 10 + 1})");
+                            if (!DictAskingPageFor.ContainsKey(message.Chat.Id))
+                            {
+                                DictAskingPageFor.Add(message.Chat.Id, "s_perks");
+                            }
+                            else
+                            {
+                                DictAskingPageFor[message.Chat.Id] = "s_perks";
+                            }
+                            await botClient.SendTextMessageAsync(message.Chat.Id, "I will ask you for pages until you use /cancel");
+                        }
+                        else
+                        {
+                            await botClient.SendTextMessageAsync(message.Chat.Id, "DBD API Error: couldn\'t get perks");
+                        }
+                        break;
+                    case "/killer_perks":
+                        if (KPerkList != null)
+                        {
+                            await botClient.SendTextMessageAsync(message.Chat.Id, $"Select page (1 - {KPerkList.Count / 10 + 1})");
+                            if (!DictAskingPageFor.ContainsKey(message.Chat.Id))
+                            {
+                                DictAskingPageFor.Add(message.Chat.Id, "k_perks");
+                            }
+                            else
+                            {
+                                DictAskingPageFor[message.Chat.Id] = "k_perks";
+                            }
+                            await botClient.SendTextMessageAsync(message.Chat.Id, "I will ask you for pages until you use /cancel");
+                        }
+                        else
+                        {
+                            await botClient.SendTextMessageAsync(message.Chat.Id, "DBD API Error: couldn\'t get perks");
+                        }
+                        break;
+                    case "/survivors":
+                        if (SurvivorList != null)
+                        {
+                            await botClient.SendTextMessageAsync(message.Chat.Id, $"Select page (1 - {SurvivorList.Count / 10 + 1})");
+                            if (!DictAskingPageFor.ContainsKey(message.Chat.Id))
+                            {
+                                DictAskingPageFor.Add(message.Chat.Id, "survivors");
+                            }
+                            else
+                            {
+                                DictAskingPageFor[message.Chat.Id] = "survivors";
+                            }
+                            await botClient.SendTextMessageAsync(message.Chat.Id, "I will ask you for pages until you use /cancel");
+                        }
+                        else
+                        {
+                            await botClient.SendTextMessageAsync(message.Chat.Id, "DBD API Error: couldn\'t get survivors");
+                        }
+                        break;
+                    case "/killers":
+                        if (KillerList != null)
+                        {
+                            await botClient.SendTextMessageAsync(message.Chat.Id, $"Select page (1 - {KillerList.Count / 10 + 1})");
+                            if (!DictAskingPageFor.ContainsKey(message.Chat.Id))
+                            {
+                                DictAskingPageFor.Add(message.Chat.Id, "killers");
+                            }
+                            else
+                            {
+                                DictAskingPageFor[message.Chat.Id] = "killers";
+                            }
+                            await botClient.SendTextMessageAsync(message.Chat.Id, "I will ask you for pages until you use /cancel");
+                        }
+                        else
+                        {
+                            await botClient.SendTextMessageAsync(message.Chat.Id, "DBD API Error: couldn\'t get killers");
+                        }
+                        break;
+                    case "/add_build":
+                        if (!System.IO.File.Exists($@"Data\Builds_{message.Chat.Id}.json"))
+                        {
+                            string jason = System.IO.File.ReadAllText(@"Data\default.json");
+                            System.IO.File.WriteAllText($@"Data\Builds_{message.Chat.Id}.json", JsonConvert.SerializeObject(JsonConvert.DeserializeObject<PerkBuilds>(jason)));
+                        }
+                        if (!DictTempPerkBuilds.ContainsKey(message.Chat.Id))
+                        {
+                            DictTempPerkBuilds.Add(message.Chat.Id, new());
+                            DictTempPerkBuilds[message.Chat.Id].perkBuilds = new();
+                            DictTempPerkBuilds[message.Chat.Id].ChatID = message.Chat.Id;
+                        }
+                        else
+                        {
+                            if (DictTempPerkBuilds[message.Chat.Id] == null)
+                            {
+                                DictTempPerkBuilds[message.Chat.Id] = new()
+                                {
+                                    perkBuilds = new(),
+                                    ChatID = message.Chat.Id
+                                };
+                            }
+                            if (DictTempPerkBuilds[message.Chat.Id].perkBuilds.Count >= 10)
+                            {
+                                await botClient.SendTextMessageAsync(message.Chat.Id, "You\'ve reached your limit of builds, consider deleting some");
+                            }
+                        }
+                        if (!DictAskingCharacterName.ContainsKey(message.Chat.Id))
+                        {
+                            DictTempPerkBuild.Add(message.Chat.Id, new());
+                            DictTempPerkBuild[message.Chat.Id].Perks = new();
+                            DictAskingCharacterName.Add(message.Chat.Id, false);
+                            DictAskingBuildName.Add(message.Chat.Id, true);
+                            DictAskingPerk.Add(message.Chat.Id, false);
+                        }
+                        if (System.IO.File.Exists($@"Data\Builds_{message.Chat.Id}.json"))
+                        {
+                            DictTempPerkBuilds[message.Chat.Id] = JsonConvert.DeserializeObject<PerkBuilds>(System.IO.File.ReadAllText($@"Data\Builds_{message.Chat.Id}.json"));
+                            if (DictTempPerkBuilds[message.Chat.Id] == null)
+                            {
+                                DictTempPerkBuilds[message.Chat.Id] = new();
+                            }
+                        }
+                        if (DictTempPerkBuilds[message.Chat.Id] == null)
+                        {
+                            DictTempPerkBuilds[message.Chat.Id] = new();
+                        }
+                        await botClient.SendTextMessageAsync(message.Chat.Id, "Please enter the build name");
+                        break;
+                    case "/view_builds":
+                        if (System.IO.File.Exists($@"Data\Builds_{message.Chat.Id}.json"))
+                        {
+                            if (!DictTempPerkBuilds.ContainsKey(message.Chat.Id))
+                            {
+                                DictTempPerkBuilds.Add(message.Chat.Id, new());
+                            }
+                            DictTempPerkBuilds[message.Chat.Id] = JsonConvert.DeserializeObject<PerkBuilds>(System.IO.File.ReadAllText($@"Data\Builds_{message.Chat.Id}.json"));
+                            if (DictTempPerkBuilds[message.Chat.Id] == null)
+                            {
+                                DictTempPerkBuilds[message.Chat.Id] = new();
+                            }
+                            await botClient.SendTextMessageAsync(message.Chat.Id, "Here are your favorite builds" +
+                                "\nYou can: " +
+                                "\nedit any of them using /edit_build {build name}" +
+                                "\nadd a new one using /add_build" +
+                                "\ndelete one of them using /delete_build {build name}" +
+                                "\ndelete all of them using /delete_all");
+
+                            try
+                            {
+                                if (DictTempPerkBuilds[message.Chat.Id] != null)
+                                    for (int i = 1; i < DictTempPerkBuilds[message.Chat.Id].perkBuilds.Count; i++)
+                                    {
+                                        if (DictTempPerkBuilds[message.Chat.Id].perkBuilds[i] != null)
+                                            await botClient.SendTextMessageAsync(message.Chat.Id, DictTempPerkBuilds[message.Chat.Id].perkBuilds[i].ToString());
+                                    }
+                            }
+                            catch (Exception) { }
+                        }
+                        else
+                        {
+                            await botClient.SendTextMessageAsync(message.Chat.Id, "Nothing here yet");
+                        }
+                        break;
+                    case "/delete_all":
+                        if (System.IO.File.Exists($@"Data\Builds_{message.Chat.Id}.json"))
+                        {
+                            System.IO.File.Delete($@"Data\Builds_{message.Chat.Id}.json");
+                            await botClient.SendTextMessageAsync(message.Chat.Id, "Burned to the ground!");
+                        }
+                        else
+                        {
+                            await botClient.SendTextMessageAsync(message.Chat.Id, "You didn\'t have anything anyway");
+                        }
+                        break;
+                    case "/help":
+                        await botClient.SendTextMessageAsync(message.Chat.Id, "Here\'s what i can do:" +
+                            "\n/stats - you can enter a SteamID and see DbD stats for that Steam profile" +
+                            "\n/survivor_perks - see a list of all survivor perks" +
+                            "\n/killer_perks - see a list of all killer perks" +
+                            "\n/survivors - see a list of all survivors" +
+                            "\n/killers - see a list of all killers" +
+                            "\n/add_build - add a perk build to your favorites (up to 10)" +
+                            "\n/view_builds - see a list of your favorite builds" +
+                            "\n/edit_build {build name} - edit an existing build" +
+                            "\n/delete_build {build name} - delete an existing build" +
+                            "\n/delete_all - delete all builds" +
+                            "\n/cancel - cancel the current action");
+                        break;
+                    default:
+                        await botClient.SendTextMessageAsync(message.Chat.Id, "Something ain\'t right");
+                        break;
+                }
+            }
+            catch (Exception) { await botClient.SendTextMessageAsync(message.Chat.Id, "Something went horribly wrong"); }
             return;
         }
         private async Task HandlerCallbackAsync(ITelegramBotClient botClient, CallbackQuery? callbackQuery)
@@ -921,96 +926,87 @@ namespace dbdBot
                         break;
                 }
             }
-            catch (Exception){}
+            catch (Exception){ }
         }
         private int FindIndexByStatName(string name, long chatID)
         {
-            if (DictUserStats[chatID] != null)
-            for (int i = 0; i < DictUserStats[chatID].playerstats.stats.Length; i++)
+            try
             {
-                if (DictUserStats[chatID].playerstats.stats[i].name == name)
-                {
-                    return i;
-                }
+                if (DictUserStats[chatID] != null)
+                    for (int i = 0; i < DictUserStats[chatID].playerstats.stats.Length; i++)
+                    {
+                        if (DictUserStats[chatID].playerstats.stats[i].name == name)
+                        {
+                            return i;
+                        }
+                    }
             }
+            catch (Exception) { }
             return 0;
         }
         private Perk? GetPerkFromName(string perk_name)
         {
-            for (int i = 0; i < PerkList.Count; i++)
+            try
             {
-                if (PerkList[i].perk_name == perk_name)
+                for (int i = 0; i < PerkList.Count; i++)
                 {
-                    return PerkList[i];
+                    if (PerkList[i].perk_name == perk_name)
+                    {
+                        return PerkList[i];
+                    }
                 }
             }
+            catch (Exception) { }
             return null;
         }
         private string? GetRoleFromName(string name)
         {
-            for (int i = 0; i < KillerList.Count; i++)
+            try
             {
-                if (KillerList[i].name == name)
+                for (int i = 0; i < KillerList.Count; i++)
                 {
-                    return "Killer";
+                    if (KillerList[i].name == name)
+                    {
+                        return "Killer";
+                    }
+                }
+                for (int i = 0; i < SurvivorList.Count; i++)
+                {
+                    if (SurvivorList[i].name == name)
+                    {
+                        return "Survivor";
+                    }
                 }
             }
-            for (int i = 0; i < SurvivorList.Count; i++)
-            {
-                if (SurvivorList[i].name == name)
-                {
-                    return "Survivor";
-                }
-            }
+            catch (Exception) { }
             return null;
         }
         private string GetRankFromSkulls(int skulls)
         {
-            switch (skulls)
+            return skulls switch
             {
-                case int n when (n >= 0 && n <= 2):
-                    return "Ash IV";
-                case int n when (n >= 2 && n <= 5):
-                    return "Ash III";
-                case int n when (n >= 6 && n <= 9):
-                    return "Ash II";
-                case int n when (n >= 10 && n <= 13):
-                    return "Ash I";
-                case int n when (n >= 14 && n <= 17):
-                    return "Bronze IV";
-                case int n when (n >= 18 && n <= 21):
-                    return "Bronze III";
-                case int n when (n >= 22 && n <= 25):
-                    return "Bronze II";
-                case int n when (n >= 26 && n <= 29):
-                    return "Bronze I";
-                case int n when (n >= 30 && n <= 34):
-                    return "Silver IV";
-                case int n when (n >= 35 && n <= 39):
-                    return "Silver III";
-                case int n when (n >= 40 && n <= 44):
-                    return "Silver II";
-                case int n when (n >= 45 && n <= 49):
-                    return "Silver I";
-                case int n when (n >= 50 && n <= 54):
-                    return "Gold IV";
-                case int n when (n >= 55 && n <= 59):
-                    return "Gold III";
-                case int n when (n >= 60 && n <= 64):
-                    return "Gold II";
-                case int n when (n >= 65 && n <= 69):
-                    return "Gold I";
-                case int n when (n >= 70 && n <= 74):
-                    return "Iridescent IV";
-                case int n when (n >= 75 && n <= 79):
-                    return "Iridescent III";
-                case int n when (n >= 80 && n <= 84):
-                    return "Iridescent II";
-                case int n when (n == 85):
-                    return "Iridescent I";
-                default:
-                    return "n/a";
-            }
+                int n when (n >= 0 && n <= 2) => "Ash IV",
+                int n when (n >= 2 && n <= 5) => "Ash III",
+                int n when (n >= 6 && n <= 9) => "Ash II",
+                int n when (n >= 10 && n <= 13) => "Ash I",
+                int n when (n >= 14 && n <= 17) => "Bronze IV",
+                int n when (n >= 18 && n <= 21) => "Bronze III",
+                int n when (n >= 22 && n <= 25) => "Bronze II",
+                int n when (n >= 26 && n <= 29) => "Bronze I",
+                int n when (n >= 30 && n <= 34) => "Silver IV",
+                int n when (n >= 35 && n <= 39) => "Silver III",
+                int n when (n >= 40 && n <= 44) => "Silver II",
+                int n when (n >= 45 && n <= 49) => "Silver I",
+                int n when (n >= 50 && n <= 54) => "Gold IV",
+                int n when (n >= 55 && n <= 59) => "Gold III",
+                int n when (n >= 60 && n <= 64) => "Gold II",
+                int n when (n >= 65 && n <= 69) => "Gold I",
+                int n when (n >= 70 && n <= 74) => "Iridescent IV",
+                int n when (n >= 75 && n <= 79) => "Iridescent III",
+                int n when (n >= 80 && n <= 84) => "Iridescent II",
+                int n when (n == 85) => "Iridescent I",
+                _ => "n/a",
+            };
         }
     }
 }
